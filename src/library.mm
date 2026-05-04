@@ -51,10 +51,11 @@ at::Tensor attention_mps(const at::Tensor& q_tensor,
 
     auto batch_size = q_tensor.size(0);
     auto head_count = q_tensor.size(1);
-    auto sequence_length = q_tensor.size(2);
+    auto sequence_length_q = q_tensor.size(2);
+    auto sequence_length_kv = k_tensor.size(2);
     auto head_dimension = q_tensor.size(3);
     
-    at::Tensor output_tensor = at::empty({batch_size, head_count, sequence_length, head_dimension}, q_tensor.options());
+    at::Tensor output_tensor = at::empty({batch_size, head_count, sequence_length_q, head_dimension}, q_tensor.options());
     
     @autoreleasepool {
         static NSMutableDictionary<NSString *, MPSGraphExecutable *> *mpsGraphExecutableCache = nil;
@@ -67,20 +68,39 @@ at::Tensor attention_mps(const at::Tensor& q_tensor,
         
         dispatch_sync(torch::mps::get_dispatch_queue(), ^(){
             std::string mps_data_type_string = at::native::mps::getMPSTypeString(q_tensor.scalar_type());
-            NSString *mpsGraphExecutableKey = [NSString stringWithFormat:@"%lld_%lld_%lld_%lld_%d_%s", batch_size, head_count, sequence_length, head_dimension, attention_mask_tensor.has_value(), mps_data_type_string.c_str()];
-            MPSGraphExecutable *mpsGraphExecutable = mpsGraphExecutableCache[mpsGraphExecutableKey];
-            NSArray<NSNumber*> *shape = @[@(batch_size), @(head_count), @(sequence_length), @(head_dimension)];
+            NSString *mpsGraphExecutableKey = [NSString stringWithFormat:@"%lld_%lld_%lld_%lld_%lld_%d_%s", batch_size, head_count, sequence_length_q, sequence_length_kv, head_dimension, attention_mask_tensor.has_value(), mps_data_type_string.c_str()];
             
+            NSArray<NSNumber*> *qShape = @[@(batch_size), @(head_count), @(sequence_length_q), @(head_dimension)];
+            NSArray<NSNumber*> *kvShape = @[@(batch_size), @(head_count), @(sequence_length_kv), @(head_dimension)];
+            NSArray<NSNumber*> *attentionMaskShape;
+
+            if(attention_mask_tensor.has_value()) {
+                attentionMaskShape = @[
+                    @((*attention_mask_tensor).size(0)),
+                    @((*attention_mask_tensor).size(1)),
+                    @((*attention_mask_tensor).size(2)),
+                    @((*attention_mask_tensor).size(3)),
+                ];
+                mpsGraphExecutableKey = [NSString stringWithFormat:@"%@_%lld_%lld_%lld_%lld",
+                                         mpsGraphExecutableKey,
+                                         attentionMaskShape[0].longLongValue,
+                                         attentionMaskShape[1].longLongValue,
+                                         attentionMaskShape[2].longLongValue,
+                                         attentionMaskShape[3].longLongValue];
+            }
+
+            MPSGraphExecutable *mpsGraphExecutable = mpsGraphExecutableCache[mpsGraphExecutableKey];
+
             if (!mpsGraphExecutable) {
                 MPSGraphDevice *graphDevice = [MPSGraphDevice deviceWithMTLDevice:commandBuffer.device];
                 MPSGraph *graph = [[MPSGraph alloc] init];
                 
-                MPSGraphTensor *mpsQ = [graph placeholderWithShape:shape dataType:mpsDataType name:@"mpsQ"];
-                MPSGraphTensor *mpsK = [graph placeholderWithShape:shape dataType:mpsDataType name:@"mpsK"];
-                MPSGraphTensor *mpsV = [graph placeholderWithShape:shape dataType:mpsDataType name:@"mpsV"];
+                MPSGraphTensor *mpsQ = [graph placeholderWithShape:qShape dataType:mpsDataType name:@"mpsQ"];
+                MPSGraphTensor *mpsK = [graph placeholderWithShape:kvShape dataType:mpsDataType name:@"mpsK"];
+                MPSGraphTensor *mpsV = [graph placeholderWithShape:kvShape dataType:mpsDataType name:@"mpsV"];
                 MPSGraphTensor *mpsAttentionMask = nil;
                 if(attention_mask_tensor.has_value()) {
-                    mpsAttentionMask = [graph placeholderWithShape:shape dataType:mpsDataTypeAttentionMask name:@"mpsAttentionMask"];
+                    mpsAttentionMask = [graph placeholderWithShape:attentionMaskShape dataType:mpsDataTypeAttentionMask name:@"mpsAttentionMask"];
                 }
                 
                 float scale = 1.0f / sqrt(static_cast<float>(head_dimension));
@@ -93,11 +113,11 @@ at::Tensor attention_mps(const at::Tensor& q_tensor,
                                                                                     name:mpsGraphExecutableKey];
                 
                 NSMutableDictionary *feeds = [NSMutableDictionary dictionaryWithCapacity:4];
-                feeds[mpsQ] = [[MPSGraphShapedType alloc] initWithShape:shape dataType:mpsDataType];
-                feeds[mpsK] = [[MPSGraphShapedType alloc] initWithShape:shape dataType:mpsDataType];
-                feeds[mpsV] = [[MPSGraphShapedType alloc] initWithShape:shape dataType:mpsDataType];
+                feeds[mpsQ] = [[MPSGraphShapedType alloc] initWithShape:qShape dataType:mpsDataType];
+                feeds[mpsK] = [[MPSGraphShapedType alloc] initWithShape:kvShape dataType:mpsDataType];
+                feeds[mpsV] = [[MPSGraphShapedType alloc] initWithShape:kvShape dataType:mpsDataType];
                 if(attention_mask_tensor.has_value()) {
-                    feeds[mpsAttentionMask] = [[MPSGraphShapedType alloc] initWithShape:shape dataType:mpsDataTypeAttentionMask];
+                    feeds[mpsAttentionMask] = [[MPSGraphShapedType alloc] initWithShape:attentionMaskShape dataType:mpsDataTypeAttentionMask];
                 }
                 
                 MPSGraphCompilationDescriptor *compilationDescriptor = [[MPSGraphCompilationDescriptor alloc] init];
@@ -109,32 +129,33 @@ at::Tensor attention_mps(const at::Tensor& q_tensor,
                                                 targetTensors:@[result]
                                              targetOperations:nil
                                         compilationDescriptor:compilationDescriptor];
+
                 mpsGraphExecutableCache[mpsGraphExecutableKey] = mpsGraphExecutable;
             }
             
             NSMutableArray *inputsArray = [NSMutableArray arrayWithCapacity:4];
             [inputsArray addObject:[[MPSGraphTensorData alloc]
                                     initWithMTLBuffer:at::native::mps::getMTLBufferStorage(q_tensor)
-                                    shape:shape
+                                    shape:qShape
                                     dataType:mpsDataType]];
             [inputsArray addObject:[[MPSGraphTensorData alloc]
                                     initWithMTLBuffer:at::native::mps::getMTLBufferStorage(k_tensor)
-                                    shape:shape
+                                    shape:kvShape
                                     dataType:mpsDataType]];
             [inputsArray addObject:[[MPSGraphTensorData alloc]
                                     initWithMTLBuffer:at::native::mps::getMTLBufferStorage(v_tensor)
-                                    shape:shape
+                                    shape:kvShape
                                     dataType:mpsDataType]];
             if(attention_mask_tensor.has_value()) {
                 [inputsArray addObject:[[MPSGraphTensorData alloc]
                                         initWithMTLBuffer:at::native::mps::getMTLBufferStorage(*attention_mask_tensor)
-                                        shape:shape
+                                        shape:attentionMaskShape
                                         dataType:mpsDataTypeAttentionMask]];
             }
             
             MPSGraphTensorData *output = [[MPSGraphTensorData alloc]
                                           initWithMTLBuffer:at::native::mps::getMTLBufferStorage(output_tensor)
-                                          shape:shape
+                                          shape:qShape
                                           dataType:mpsDataType];
             
             [mpsGraphExecutable encodeToCommandBuffer:commandBuffer
