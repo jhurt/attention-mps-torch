@@ -13,7 +13,7 @@ attention that uses MPSGraph's gemm, transpose and softmax operations
 but does not use MPSGraph's `scaledDotProductAttentionWithQueryTensor:keyTensor:valueTensor:maskTensor:scale:name:` operation.
 This operation is available since macOS 18.0 and is often faster for larger sequence lengths.
 
-In addition, MLX has its own SDPA implementation that can be faster, see the [benchmark](#m3-max-benchmark-results) for the difference in performance for various Q, K, and V shapes.
+In addition, MLX has its own SDPA implementation that is also quite fast, see the [benchmark](#m3-max-benchmark-results) for the difference in performance for various Q, K, and V shapes.
 
 ## Install
 ```
