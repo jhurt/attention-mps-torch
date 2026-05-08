@@ -1,19 +1,19 @@
 # attention_mps_torch
 [![PyPI version](https://badge.fury.io/py/attention-mps-torch.svg)](https://badge.fury.io/py/attention-mps-torch)
 
-attention_mps_torch is a custom PyTorch operator for invoking high performance SDPA backends during inference.
+attention_mps_torch provides custom PyTorch operators for invoking high performance Apple Silicon SDPA backends during inference.
 
 Supported backends include:
  * Metal Performance Shaders Graph [scaledDotProductAttentionWithQueryTensor:keyTensor:valueTensor:maskTensor:scale:name:](https://developer.apple.com/documentation/metalperformanceshadersgraph/mpsgraph/scaleddotproductattention(query:key:value:mask:scale:name:)?language=objc)
- * MLX [mlx.core.fast.scaled_dot_product_attention](https://ml-explore.github.io/mlx/build/html/python/_autosummary/mlx.core.fast.scaled_dot_product_attention.html). Note this operator builds against my fork of [MLX](https://github.com/jhurt/mlx) that has a patch for allowing MLX arrays to wrap memory owned by PyTorch-created Metal buffers.
+ * MLX [mlx.core.fast.scaled_dot_product_attention](https://ml-explore.github.io/mlx/build/html/python/_autosummary/mlx.core.fast.scaled_dot_product_attention.html). Note this project builds against my fork of [MLX](https://github.com/jhurt/mlx) that has a patch for allowing MLX arrays to wrap memory owned by PyTorch-created Metal buffers to avoid unnecessary data copying.
 
+## Motivation
 As of PyTorch 2.11.0, calling PyTorch's [torch.nn.functional.scaled_dot_product_attention](https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html) 
 function using the MPS backend will either invoke custom Metal kernels or an implementation of 
-attention that uses MPSGraph's gemm, transpose and softmax operations
-but does not use MPSGraph's `scaledDotProductAttentionWithQueryTensor:keyTensor:valueTensor:maskTensor:scale:name:` operation.
-This operation is available since macOS 18.0 and is often faster for larger sequence lengths.
+attention that uses MPSGraph's gemm, transpose and softmax operations.
 
-In addition, MLX has its own SDPA implementation that is also quite fast, see the [benchmark](#m3-max-benchmark-results) for the difference in performance for various Q, K, and V shapes.
+Howerver, for some shapes of Q, K, and V, MPSGraph's SDPA and/or MLX's SDPA are more performant.
+Refer to the [benchmark](#m3-max-benchmark-results) for the difference in performance for various Q, K, and V shapes.
 
 ## Install
 ```
