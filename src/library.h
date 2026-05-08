@@ -18,7 +18,12 @@
 
 #include <torch/extension.h>
 
-at::Tensor attention_mps(const at::Tensor& q,
+at::Tensor attention_mps_graph(const at::Tensor& q,
+                               const at::Tensor& k,
+                               const at::Tensor& v,
+                               const std::optional<at::Tensor>& attention_mask_tensor);
+
+at::Tensor attention_mlx(const at::Tensor& q,
                          const at::Tensor& k,
                          const at::Tensor& v,
                          const std::optional<at::Tensor>& attention_mask_tensor);

@@ -20,7 +20,6 @@ import torch.nn.functional as F
 
 import attention_mps
 
-
 def benchmark_operation(operation_func, args, iterations=20, warmup=10):
     """
     Measures the execution time of a GPU operation with proper synchronization.
@@ -78,29 +77,39 @@ def run_benchmarks():
                 expected_output = F.scaled_dot_product_attention(
                     query_tensor, key_tensor, value_tensor, attn_mask=None
                 )
-                actual_output = torch.ops.custom_ops.attention_mps(
+
+                mps_graph_output = torch.ops.custom_ops.attention_mps_graph(
                     query_tensor, key_tensor, value_tensor, None
                 )
+                torch.testing.assert_close(mps_graph_output, expected_output, atol=atol, rtol=rtol)
 
-                torch.testing.assert_close(actual_output, expected_output, atol=atol, rtol=rtol)
+                mlx_output = torch.ops.custom_ops.attention_mlx(
+                    query_tensor, key_tensor, value_tensor, None
+                )
+                torch.testing.assert_close(mlx_output, expected_output, atol=atol, rtol=rtol)
 
             native_func = lambda q, k, v: F.scaled_dot_product_attention(q, k, v, attn_mask=None)
             native_ms = benchmark_operation(native_func, (query_tensor, key_tensor, value_tensor))
 
-            custom_func = lambda q, k, v: torch.ops.custom_ops.attention_mps(q, k, v, None)
-            custom_ms = benchmark_operation(custom_func, (query_tensor, key_tensor, value_tensor))
+            mps_graph_func = lambda q, k, v: torch.ops.custom_ops.attention_mps_graph(q, k, v, None)
+            mps_graph_ms = benchmark_operation(mps_graph_func, (query_tensor, key_tensor, value_tensor))
+            mps_graph_speedup = native_ms / mps_graph_ms
 
-            speedup = native_ms / custom_ms
+            mlx_func = lambda q, k, v: torch.ops.custom_ops.attention_mlx(q, k, v, None)
+            mlx_ms = benchmark_operation(mlx_func, (query_tensor, key_tensor, value_tensor))
+            mlx_speedup = native_ms / mlx_ms
 
             all_results.append({
                 "Data Type": str(dtype).replace("torch.", ""),
                 "Shape (B,H,S,D)": f"({batch_size}, {head_count}, {seq_len}, {head_dim})",
                 "Native (ms)": f"{native_ms:.4f}",
-                "Custom (ms)": f"{custom_ms:.4f}",
-                "Speedup": f"{speedup:.2f}x",
+                "MPS Graph (ms)": f"{mps_graph_ms:.4f}",
+                "MPS Graph Speedup": f"{mps_graph_speedup:.2f}x",
+                "MLX (ms)": f"{mlx_ms:.4f}",
+                "MLX Speedup": f"{mlx_speedup:.2f}x",
             })
 
-            del query_tensor, key_tensor, value_tensor, expected_output, actual_output
+            del query_tensor, key_tensor, value_tensor, expected_output, mps_graph_output, mlx_output
             gc.collect()
             torch.mps.empty_cache()
 

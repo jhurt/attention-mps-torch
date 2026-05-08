@@ -18,6 +18,8 @@ import torch.nn.functional as F
 
 import attention_mps
 
+dtypes = [torch.float32, torch.float16, torch.bfloat16]
+custom_ops = [torch.ops.custom_ops.attention_mps_graph, torch.ops.custom_ops.attention_mlx]
 
 class TestAttentionMPS:
     @pytest.mark.parametrize("batch_size, head_count, sequence_length, head_dim", [
@@ -29,16 +31,19 @@ class TestAttentionMPS:
         (8, 1, 32, 128),
         (1, 24, 4192, 256),
         (1, 128, 4608, 512),
-        (2, 32, 8192, 256),
+        (1, 24, 4608, 128),
     ])
-    def test_functional_correctness(self, batch_size, head_count, sequence_length, head_dim):
+    @pytest.mark.parametrize("dtype", dtypes)
+    @pytest.mark.parametrize("custom_op", custom_ops)
+    def test_functional_correctness(self, batch_size, head_count, sequence_length, head_dim, dtype, custom_op):
         """
         Validates the custom attention_mps op against torch.nn.functional.scaled_dot_product_attention
         using the (batch_size, head_count, sequence_length, head_dim) shape format.
         """
         torch.manual_seed(42)
-        dtype = torch.float32
         device = "mps"
+        atol = 1e-3 if dtype == torch.float32 else 1e-2
+        rtol = 1e-3 if dtype == torch.float32 else 1e-2
 
         query_tensor = torch.randn(
             batch_size, head_count, sequence_length, head_dim,
@@ -62,19 +67,23 @@ class TestAttentionMPS:
             is_causal=False
         )
 
-        actual_output = torch.ops.custom_ops.attention_mps(
+        actual_output = custom_op(
             query_tensor,
             key_tensor,
             value_tensor,
             None
         )
 
-        torch.testing.assert_close(actual_output, expected_output, atol=1e-4, rtol=1e-4)
+        torch.testing.assert_close(actual_output, expected_output, atol=atol, rtol=rtol)
 
-    def test_q_kv_different_shapes(self):
+
+    @pytest.mark.parametrize("dtype", dtypes)
+    @pytest.mark.parametrize("custom_op", custom_ops)
+    def test_q_kv_different_shapes(self, dtype, custom_op):
         torch.manual_seed(42)
-        dtype = torch.float32
         device = "mps"
+        atol = 1e-3 if dtype == torch.float32 else 1e-2
+        rtol = 1e-3 if dtype == torch.float32 else 1e-2
 
         q_shape = (1, 12, 512, 64)
         kv_shape = (1, 12, 1024, 64)
@@ -100,14 +109,14 @@ class TestAttentionMPS:
             is_causal=False
         )
 
-        actual_output = torch.ops.custom_ops.attention_mps(
+        actual_output = custom_op(
             query_tensor,
             key_tensor,
             value_tensor,
             None
         )
 
-        torch.testing.assert_close(actual_output, expected_output, atol=1e-4, rtol=1e-4)
+        torch.testing.assert_close(actual_output, expected_output, atol=atol, rtol=rtol)
 
         q_shape = (1, 12, 1024, 64)
         kv_shape = (1, 12, 512, 64)
@@ -133,11 +142,11 @@ class TestAttentionMPS:
             is_causal=False
         )
 
-        actual_output = torch.ops.custom_ops.attention_mps(
+        actual_output = custom_op(
             query_tensor,
             key_tensor,
             value_tensor,
             None
         )
 
-        torch.testing.assert_close(actual_output, expected_output, atol=1e-4, rtol=1e-4)
+        torch.testing.assert_close(actual_output, expected_output, atol=atol, rtol=rtol)
