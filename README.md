@@ -1,9 +1,9 @@
 # attention_mps_torch
 [![PyPI version](https://badge.fury.io/py/attention-mps-torch.svg)](https://badge.fury.io/py/attention-mps-torch)
 
-attention_mps_torch provides custom PyTorch operators for invoking high performance Apple Silicon SDPA backends during inference.
+attention_mps_torch provides custom PyTorch operators for invoking high performance Apple Silicon SDPA implementations during inference.
 
-Supported backends include:
+Supported implementations include:
  * Metal Performance Shaders Graph [scaledDotProductAttentionWithQueryTensor:keyTensor:valueTensor:maskTensor:scale:name:](https://developer.apple.com/documentation/metalperformanceshadersgraph/mpsgraph/scaleddotproductattention(query:key:value:mask:scale:name:)?language=objc)
  * MLX [mlx.core.fast.scaled_dot_product_attention](https://ml-explore.github.io/mlx/build/html/python/_autosummary/mlx.core.fast.scaled_dot_product_attention.html). Note this project builds against my fork of [MLX](https://github.com/jhurt/mlx) that has a patch for allowing MLX arrays to wrap memory owned by PyTorch-created Metal buffers to avoid unnecessary data copying.
 
@@ -13,7 +13,7 @@ function using the MPS backend will either invoke custom Metal kernels or an imp
 attention that uses MPSGraph's gemm, transpose and softmax operations.
 
 Howerver, for some shapes of Q, K, and V, MPSGraph's SDPA and/or MLX's SDPA are more performant.
-Refer to the [benchmark](#m3-max-benchmark-results) for the difference in performance for various Q, K, and V shapes.
+Refer to the [benchmarks](#benchmark-results) for the difference in performance for various Q, K, and V shapes.
 
 ## Install
 ```
@@ -22,7 +22,8 @@ pip install attention-mps-torch
 
 ## Install from source
 ```
-xcode-select --install 
+xcode-select --install
+xcodebuild -downloadComponent MetalToolchain
 pip install .
 ```
 
@@ -53,7 +54,34 @@ pip install -e ".[test]"
 python3 tests/benchmark_performance.py
 ```
 
-## M3 Max 128 GB RAM Benchmark Results
+## Benchmark Results
+
+### M1 Max 32 GB RAM
+| Data Type   | Shape (B,H,S,D)    |   Native (ms) |   MPS Graph (ms) | MPS Graph Speedup   |   MLX (ms) | MLX Speedup   |
+|-------------|--------------------|---------------|------------------|---------------------|------------|---------------|
+| float32     | (1, 1, 64, 32)     |        0.1017 |           0.2526 | 0.40x               |     0.5442 | 0.19x         |
+| float32     | (2, 4, 128, 64)    |        0.2162 |           0.3297 | 0.66x               |     0.5129 | 0.42x         |
+| float32     | (4, 8, 256, 128)   |        0.6575 |           0.622  | 1.06x               |     0.9658 | 0.68x         |
+| float32     | (1, 12, 512, 64)   |        0.6034 |           0.5757 | 1.05x               |     0.7653 | 0.79x         |
+| float32     | (2, 16, 1024, 32)  |        4.0947 |           1.516  | 2.70x               |     2.8082 | 1.46x         |
+| float32     | (8, 1, 32, 128)    |        0.0934 |           0.2728 | 0.34x               |     0.4915 | 0.19x         |
+| float32     | (1, 24, 4096, 256) |       94.697  |         153.187  | 0.62x               |    75.3196 | 1.26x         |
+| float16     | (1, 1, 64, 32)     |        0.1079 |           0.2796 | 0.39x               |     0.5614 | 0.19x         |
+| float16     | (2, 4, 128, 64)    |        0.193  |           0.2988 | 0.65x               |     0.5281 | 0.37x         |
+| float16     | (4, 8, 256, 128)   |        0.6161 |           0.5529 | 1.11x               |     0.8023 | 0.77x         |
+| float16     | (1, 12, 512, 64)   |        0.7155 |           0.5097 | 1.40x               |     0.7061 | 1.01x         |
+| float16     | (2, 16, 1024, 32)  |        4.5482 |           1.2235 | 3.72x               |     2.1448 | 2.12x         |
+| float16     | (8, 1, 32, 128)    |        0.1125 |           0.3157 | 0.36x               |     0.5484 | 0.21x         |
+| float16     | (1, 24, 4096, 256) |       98.3478 |         147.19   | 0.67x               |    64.8966 | 1.52x         |
+| bfloat16    | (1, 1, 64, 32)     |        0.1137 |           0.2963 | 0.38x               |     0.5765 | 0.20x         |
+| bfloat16    | (2, 4, 128, 64)    |        0.2066 |           0.3895 | 0.53x               |     0.5426 | 0.38x         |
+| bfloat16    | (4, 8, 256, 128)   |        0.8171 |           1.0856 | 0.75x               |     0.9101 | 0.90x         |
+| bfloat16    | (1, 12, 512, 64)   |        0.7237 |           0.9612 | 0.75x               |     0.7272 | 1.00x         |
+| bfloat16    | (2, 16, 1024, 32)  |        4.8268 |           2.5261 | 1.91x               |     2.4599 | 1.96x         |
+| bfloat16    | (8, 1, 32, 128)    |        0.1152 |           0.3801 | 0.30x               |     0.5634 | 0.20x         |
+| bfloat16    | (1, 24, 4096, 256) |      133.621  |         185.198  | 0.72x               |    75.7356 | 1.76x         |
+
+### M3 Max 128 GB RAM
 | Data Type   | Shape (B,H,S,D)     |   Native (ms) |   MPS Graph (ms) | MPS Graph Speedup   |   MLX (ms) | MLX Speedup   |
 |-------------|---------------------|---------------|------------------|---------------------|------------|---------------|
 | float32     | (1, 1, 64, 32)      |        0.0743 |           0.2322 | 0.32x               |     0.4591 | 0.16x         |
@@ -84,7 +112,7 @@ python3 tests/benchmark_performance.py
 | bfloat16    | (1, 128, 4096, 512) |      638.942  |         558.299  | 1.14x               |   371.982  | 1.72x         |
 | bfloat16    | (1, 24, 8192, 128)  |      255.026  |          96.8845 | 2.63x               |    79.3998 | 3.21x         |
 
-## M4 16 GB RAM Benchmark Results
+### M4 16 GB RAM
 | Data Type   | Shape (B,H,S,D)    |   Native (ms) |   MPS Graph (ms) | MPS Graph Speedup   |   MLX (ms) | MLX Speedup   |
 |-------------|--------------------|---------------|------------------|---------------------|------------|---------------|
 | float32     | (1, 1, 64, 32)     |        0.0747 |           0.2725 | 0.27x               |     0.573  | 0.13x         |
@@ -108,7 +136,6 @@ python3 tests/benchmark_performance.py
 | bfloat16    | (2, 16, 1024, 32)  |       14.6453 |           2.073  | 7.06x               |     5.7285 | 2.56x         |
 | bfloat16    | (8, 1, 32, 128)    |        0.0688 |           0.2655 | 0.26x               |     0.3538 | 0.19x         |
 | bfloat16    | (1, 24, 4096, 256) |      316.168  |         185.893  | 1.70x               |   175.203  | 1.80x         |
-
 
 ## License
 
