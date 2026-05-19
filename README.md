@@ -1,7 +1,7 @@
-# attention_mps_torch
+# attention-mps-torch
 [![PyPI version](https://badge.fury.io/py/attention-mps-torch.svg)](https://badge.fury.io/py/attention-mps-torch)
 
-attention_mps_torch provides custom PyTorch operators for invoking high performance Apple Silicon SDPA implementations during inference.
+attention-mps-torch provides custom PyTorch operators for invoking high performance Apple Silicon SDPA implementations during inference.
 
 Supported implementations include:
  * Metal Performance Shaders Graph [scaledDotProductAttentionWithQueryTensor:keyTensor:valueTensor:maskTensor:scale:name:](https://developer.apple.com/documentation/metalperformanceshadersgraph/mpsgraph/scaleddotproductattention(query:key:value:mask:scale:name:)?language=objc)
