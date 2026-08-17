@@ -15,11 +15,6 @@ attention that uses MPSGraph's gemm, transpose and softmax operations.
 Howerver, for some shapes of Q, K, and V, MPSGraph's SDPA and/or MLX's SDPA are more performant.
 Refer to the [benchmarks](#benchmark-results) for the difference in performance for various Q, K, and V shapes.
 
-## Install
-```
-pip install attention-mps-torch
-```
-
 ## Install from source
 ```
 xcode-select --install
