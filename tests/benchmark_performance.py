@@ -102,10 +102,10 @@ def run_benchmarks():
             all_results.append({
                 "Data Type": str(dtype).replace("torch.", ""),
                 "Shape (B,H,S,D)": f"({batch_size}, {head_count}, {seq_len}, {head_dim})",
-                "Native (ms)": f"{native_ms:.4f}",
+                "PyTorch {}".format(torch.__version__): f"{native_ms:.4f}",
                 "MPS Graph (ms)": f"{mps_graph_ms:.4f}",
                 "MPS Graph Speedup": f"{mps_graph_speedup:.2f}x",
-                "MLX (ms)": f"{mlx_ms:.4f}",
+                "MLX 0.32.1 (ms)": f"{mlx_ms:.4f}",
                 "MLX Speedup": f"{mlx_speedup:.2f}x",
             })
 
