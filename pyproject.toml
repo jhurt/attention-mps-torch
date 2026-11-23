@@ -1,10 +1,10 @@
 [build-system]
-requires = ["scikit-build-core>=0.5", "torch"]
+requires = ["scikit-build-core>=0.5", "torch>=2.15.0"]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "attention_mps_torch"
-version = "0.2.0"
+version = "0.3.0"
 license = {text = "Apache-2.0"}
 classifiers = [
     "License :: OSI Approved :: Apache Software License",

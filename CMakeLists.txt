@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 4.2)
+
+set(CMAKE_C_COMPILER "/usr/bin/clang" CACHE FILEPATH "" FORCE)
+set(CMAKE_CXX_COMPILER "/usr/bin/clang++" CACHE FILEPATH "" FORCE)
+set(CMAKE_OBJCXX_COMPILER "/usr/bin/clang++" CACHE FILEPATH "" FORCE)
+
 project(attention_mps_torch LANGUAGES CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -12,7 +17,7 @@ find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 
 # site-packages
 execute_process(
-        COMMAND ${Python_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'))"
+        COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'))"
         OUTPUT_VARIABLE SITE_PACKAGES
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
